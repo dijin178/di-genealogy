@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 溧阳狄氏家谱</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Microsoft YaHei','PingFang SC',sans-serif; background:#f5f0eb; color:#2c1810; }
+        .header { background:linear-gradient(135deg,#8b0000,#a52a2a,#8b0000); color:#fff; padding:16px 30px; display:flex; justify-content:space-between; align-items:center; }
+        .header h1 { font-size:20px; }
+        .header a { color:#e8d5c0; text-decoration:none; font-size:14px; }
+        .container { max-width:800px; margin:0 auto; padding:30px 20px; }
+        .card { background:#fff; border-radius:12px; padding:24px; box-shadow:0 2px 12px rgba(0,0,0,0.08); margin-bottom:20px; }
+        .card h3 { font-size:16px; color:#5a2d14; margin-bottom:16px; }
+        table { width:100%; border-collapse:collapse; font-size:14px; }
+        th { background:#f0e8e0; padding:10px 12px; text-align:left; }
+        td { padding:8px 12px; border-bottom:1px solid #f0e8e0; }
+        select { padding:4px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px; }
+        .btn { padding:4px 12px; border:none; border-radius:4px; font-size:13px; cursor:pointer; }
+        .btn-danger { background:#c62828; color:#fff; }
+        .btn-save { background:#2e7d32; color:#fff; }
+        .btn:hover { opacity:0.8; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚙️ 管理后台</h1>
+        <div>
+            <span id="userInfo"></span>
+            <a href="/">返回首页</a>
+            <a href="#" onclick="logout()" style="margin-left:12px;">退出</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h3>👥 用户管理</h3>
+            <table id="userTable">
+                <thead><tr><th>用户名</th><th>显示名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        async function loadUsers() {
+            const resp = await fetch('/api/admin/users');
+            const users = await resp.json();
+            const tbody = document.querySelector('#userTable tbody');
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td>${u.display_name}</td>
+                    <td>
+                        <select onchange="updateUser(${u.id},'role',this.value)" ${u.username==='admin'?'disabled':''}>
+                            <option value="admin" ${u.role==='admin'?'selected':''}>管理员</option>
+                            <option value="editor" ${u.role==='editor'?'selected':''}>编辑</option>
+                            <option value="viewer" ${u.role==='viewer'?'selected':''}>访客</option>
+                        </select>
+                    </td>
+                    <td>${u.created_at || ''}</td>
+                    <td>
+                        ${u.username !== 'admin' ? `<button class="btn btn-danger" onclick="deleteUser(${u.id})">删除</button>` : '—'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        async function updateUser(uid, field, value) {
+            await fetch(`/api/admin/users/${uid}`, {
+                method:'PUT', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({[field]:value})
+            });
+        }
+        
+        async function deleteUser(uid) {
+            if(confirm('确定删除此用户？')){
+                await fetch(`/api/admin/users/${uid}`, {method:'DELETE'});
+                loadUsers();
+            }
+        }
+        
+        async function logout() {
+            await fetch('/api/logout', {method:'POST'});
+            window.location.href='/login';
+        }
+        
+        async function init() {
+            const resp = await fetch('/api/me');
+            const me = await resp.json();
+            document.getElementById('userInfo').textContent = `${me.display_name}(${me.role}) | `;
+            loadUsers();
+        }
+        init();
+    </script>
+</body>
+</html>
