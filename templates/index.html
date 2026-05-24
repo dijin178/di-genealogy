@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>溧阳狄氏家谱查询系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: #f5f0eb; color: #2c1810; }
+        
+        .header {
+            background: linear-gradient(135deg, #8b0000 0%, #a52a2a 50%, #8b0000 100%);
+            color: #fff; padding: 20px 40px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+        }
+        .header h1 { font-size: 28px; font-weight: 700; letter-spacing: 4px; }
+        .header p { font-size: 14px; opacity: 0.85; margin-top: 4px; }
+        
+        .nav {
+            background: #3e1f0d; display: flex; padding: 0 40px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .nav a {
+            color: #e8d5c0; text-decoration: none; padding: 12px 24px;
+            font-size: 15px; transition: all 0.3s; border-bottom: 3px solid transparent;
+        }
+        .nav a:hover, .nav a.active { background: #5a2d14; color: #fff; border-bottom-color: #d4a574; }
+        .nav .user-info { margin-left: auto; color:#d4a574; padding:12px 16px; font-size:13px; display:flex; align-items:center; gap:8px; }
+        .nav .user-info a { padding:4px 10px; font-size:12px; border:1px solid #d4a574; border-radius:4px; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+        
+        .search-box {
+            background: #fff; border-radius: 12px; padding: 30px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 30px;
+        }
+        .search-box h2 { font-size: 18px; margin-bottom: 16px; color: #5a2d14; }
+        .search-row {
+            display: flex; gap: 12px;
+        }
+        .search-row input {
+            flex: 1; padding: 12px 18px; border: 2px solid #ddd; border-radius: 8px;
+            font-size: 16px; outline: none; transition: border 0.3s;
+        }
+        .search-row input:focus { border-color: #8b0000; }
+        .search-row button {
+            padding: 12px 32px; background: #8b0000; color: #fff; border: none;
+            border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s;
+        }
+        .search-row button:hover { background: #a52a2a; }
+        
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px; margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #fff; border-radius: 12px; padding: 24px; text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-top: 4px solid #8b0000;
+        }
+        .stat-card .num { font-size: 36px; font-weight: 700; color: #8b0000; }
+        .stat-card .label { font-size: 14px; color: #888; margin-top: 4px; }
+        
+        .gen-chart {
+            background: #fff; border-radius: 12px; padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .gen-chart h3 { font-size: 18px; color: #5a2d14; margin-bottom: 16px; }
+        .bar-item { display: flex; align-items: center; margin-bottom: 6px; }
+        .bar-label { width: 60px; font-size: 13px; color: #666; text-align: right; padding-right: 10px; }
+        .bar-track { flex: 1; height: 22px; background: #f0e8e0; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #c0392b, #e74c3c); border-radius: 4px;
+                     transition: width 1s ease; display: flex; align-items: center; padding-left: 6px; }
+        .bar-fill span { color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        
+        .footer {
+            text-align: center; padding: 30px; color: #999; font-size: 13px;
+            border-top: 1px solid #e0d5cc; margin-top: 40px;
+        }
+        
+        @media (max-width: 600px) {
+            .header { padding: 15px 20px; }
+            .header h1 { font-size: 20px; }
+            .nav { padding: 0 10px; overflow-x: auto; }
+            .nav a { padding: 10px 14px; font-size: 13px; }
+            .container { padding: 15px 10px; }
+            .search-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📜 溧阳狄氏家谱查询系统</h1>
+        <p>溧湘堂 · 始祖狄英 · 二十九世 · 三万余族人</p>
+    </div>
+    
+    <div class="nav">
+        <a href="/" class="active">首页</a>
+        <a href="/search">人物查询</a>
+        <a href="/tree">世系树</a>
+        <a href="/stats">统计数据</a>
+        <span class="user-info"><span id="userName"></span><a href="#" onclick="logout()">退出</a></span>
+    </div>
+    
+    <div class="container">
+        <div class="search-box">
+            <h2>🔍 查询家族成员</h2>
+            <div class="search-row">
+                <input type="text" id="searchInput" placeholder="输入姓名、字辈、别名或ID号搜索..." 
+                       onkeydown="if(event.key==='Enter') doSearch()">
+                <button onclick="doSearch()">搜索</button>
+            </div>
+        </div>
+        
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card"><div class="num">—</div><div class="label">总人数</div></div>
+            <div class="stat-card"><div class="num">—</div><div class="label">家族成员</div></div>
+            <div class="stat-card"><div class="num">—</div><div class="label">世代</div></div>
+            <div class="stat-card"><div class="num">—</div><div class="label">关系链</div></div>
+            <div class="stat-card"><div class="num">—</div><div class="label">有传记</div></div>
+            <div class="stat-card"><div class="num">—</div><div class="label">配偶</div></div>
+        </div>
+        
+        <div class="gen-chart">
+            <h3>📊 各世人口分布</h3>
+            <div id="genBars"></div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        溧阳狄氏历史文化研究会 · 恒进家园 · 数据库共收录 30,021 位族人
+    </div>
+    
+    <script>
+        async function initAuth() {
+            const resp = await fetch('/api/me');
+            const me = await resp.json();
+            if (!me.logged_in) { window.location.href='/login'; return; }
+            document.getElementById('userName').textContent = me.display_name + ' (' + me.role + ')';
+        }
+        async function logout() {
+            await fetch('/api/logout', {method:'POST'});
+            window.location.href='/login';
+        }
+        initAuth();
+        async function loadStats() {
+            const resp = await fetch('/api/stats');
+            const data = await resp.json();
+            
+            document.querySelectorAll('.stat-card')[0].querySelector('.num').textContent = data.total.toLocaleString();
+            document.querySelectorAll('.stat-card')[1].querySelector('.num').textContent = data.family.toLocaleString();
+            document.querySelectorAll('.stat-card')[2].querySelector('.num').textContent = data.max_gen + '世';
+            document.querySelectorAll('.stat-card')[3].querySelector('.num').textContent = data.relations.toLocaleString();
+            document.querySelectorAll('.stat-card')[4].querySelector('.num').textContent = data.with_bio;
+            document.querySelectorAll('.stat-card')[5].querySelector('.num').textContent = data.spouses;
+            
+            const maxCount = Math.max(...data.generations.map(g => g.count));
+            const barsHtml = data.generations.map(g => {
+                const pct = (g.count / maxCount * 100).toFixed(1);
+                return `<div class="bar-item">
+                    <div class="bar-label">第${g.num}世</div>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width:${pct}%">
+                            <span>${g.count.toLocaleString()}人</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            document.getElementById('genBars').innerHTML = barsHtml;
+        }
+        
+        function doSearch() {
+            const q = document.getElementById('searchInput').value.trim();
+            if (q) window.location.href = '/search?q=' + encodeURIComponent(q);
+        }
+        
+        loadStats();
+    </script>
+</body>
+</html>
