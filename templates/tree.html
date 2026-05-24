@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世系树 - 溧阳狄氏家谱</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: #f5f0eb; color: #2c1810; overflow-x: hidden; }
+        .header { background: linear-gradient(135deg, #8b0000, #a52a2a, #8b0000); color: #fff; padding: 20px 40px; }
+        .header h1 { font-size: 24px; letter-spacing: 2px; }
+        .nav { background: #3e1f0d; display: flex; padding: 0 40px; }
+        .nav a { color: #e8d5c0; text-decoration: none; padding: 12px 24px; font-size: 15px; transition: all 0.3s; border-bottom: 3px solid transparent; }
+        .nav a:hover, .nav a.active { background: #5a2d14; color: #fff; border-bottom-color: #d4a574; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+        
+        .controls { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .controls label { font-size: 14px; color: #555; }
+        .controls select { padding: 8px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+        .controls select:focus { border-color: #8b0000; }
+        .controls button { padding: 8px 20px; background: #8b0000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .controls button:hover { background: #a52a2a; }
+        .controls input { padding: 8px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; flex: 1; min-width: 150px; }
+        .controls input:focus { border-color: #8b0000; }
+        
+        #tree-container {
+            background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: auto; min-height: 500px; position: relative;
+        }
+        #tree-container svg { display: block; margin: 0 auto; }
+        
+        .loading { text-align: center; padding: 100px 20px; color: #999; font-size: 16px; }
+        .info-bar { font-size: 13px; color: #888; margin-top: 8px; text-align: center; }
+        
+        .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; border-top: 1px solid #e0d5cc; margin-top: 40px; }
+        
+        .node circle { stroke-width: 2px; cursor: pointer; }
+        .node text { font-size: 12px; cursor: pointer; }
+        .link { fill: none; stroke: #ccc; stroke-width: 1.5px; }
+        .node:hover circle { stroke-width: 4px; }
+        
+        .tooltip {
+            position: absolute; background: #2c1810; color: #fff; padding: 6px 12px; border-radius: 6px;
+            font-size: 13px; pointer-events: none; display: none; white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>📜 溧阳狄氏家谱查询系统</h1></div>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/search">人物查询</a>
+        <a href="/tree" class="active">世系树</a>
+        <a href="/stats">统计数据</a>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <label>选择世代:</label>
+            <select id="genSelect" onchange="loadGenTree()"></select>
+            <label>或搜索始祖:</label>
+            <input type="text" id="rootSearch" placeholder="输入姓名搜索..." onkeydown="if(event.key==='Enter') searchRoot()">
+            <button onclick="searchRoot()">定位</button>
+            <button onclick="resetZoom()" style="background:#666;">重置视图</button>
+        </div>
+        <div id="tree-container">
+            <div class="loading" id="loading">加载世系数据...</div>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+        <div class="info-bar" id="infoBar">提示：点击人物可查看详情，滚轮缩放，拖拽平移</div>
+    </div>
+    <div class="footer">溧阳狄氏历史文化研究会</div>
+    
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        const container = document.getElementById('tree-container');
+        const tooltip = document.getElementById('tooltip');
+        let currentGen = 1;
+        
+        // 加载世代下拉框
+        async function loadGens() {
+            const resp = await fetch('/api/stats');
+            const data = await resp.json();
+            const sel = document.getElementById('genSelect');
+            data.generations.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.num;
+                opt.textContent = `第${g.num}世 (${g.count.toLocaleString()}人)`;
+                sel.appendChild(opt);
+            });
+            sel.value = 1;
+            loadGenTree(1);
+        }
+        
+        async function loadGenTree(gen) {
+            currentGen = gen || parseInt(document.getElementById('genSelect').value);
+            document.getElementById('loading').innerHTML = '加载第' + currentGen + '世数据...';
+            document.getElementById('loading').style.display = 'block';
+            
+            const resp = await fetch(`/api/gen_tree/${currentGen}`);
+            const persons = await resp.json();
+            
+            document.getElementById('loading').style.display = 'none';
+            renderGenTree(persons);
+        }
+        
+        function renderGenTree(persons) {
+            container.querySelectorAll('svg').forEach(s => s.remove());
+            if (persons.length === 0) {
+                container.innerHTML += '<div style="text-align:center;padding:60px;color:#999;">暂无数据</div>';
+                return;
+            }
+            
+            const width = Math.max(container.clientWidth - 40, 600);
+            const cardW = 140, cardH = 50;
+            const cols = Math.ceil(Math.sqrt(persons.length * (width / 200)));
+            const cellW = Math.max(cardW + 20, width / cols);
+            const cellH = cardH + 30;
+            const rows = Math.ceil(persons.length / cols);
+            const height = Math.max(rows * cellH + 40, 400);
+            
+            // 按父亲ID分组（兄弟姐妹在一起）
+            const groups = {};
+            persons.forEach(p => {
+                const key = p.father_id || 'root';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(p);
+            });
+            
+            const svg = d3.select('#tree-container')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .style('cursor', 'grab');
+            
+            const g = svg.append('g');
+            
+            // 缩放
+            const zoom = d3.zoom()
+                .scaleExtent([0.2, 5])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+            svg.call(zoom);
+            
+            // 绘制格子布局
+            let idx = 0;
+            Object.entries(groups).forEach(([fid, members]) => {
+                const col = idx % cols;
+                const row = Math.floor(idx / cols);
+                const x = col * cellW + 10;
+                const y = row * cellH + 10;
+                
+                // 兄弟姐妹组背景
+                const groupW = Math.max(members.length * (cardW + 6) - 6, cardW);
+                
+                // 绘制每个人
+                members.forEach((p, mi) => {
+                    const px = x + mi * (cardW + 6);
+                    const py = y;
+                    
+                    const card = g.append('g')
+                        .attr('class', 'node')
+                        .style('cursor', 'pointer')
+                        .on('click', () => { window.location.href = `/person/${p.id}`; })
+                        .on('mouseover', (event) => {
+                            tooltip.style.display = 'block';
+                            tooltip.innerHTML = `${p.name}${p.zibei ? ' ('+p.zibei+')' : ''}${p.alias ? ' · '+p.alias : ''}${p.birth ? ' · '+p.birth : ''}${p.death ? ' ~ '+p.death : ''}`;
+                        })
+                        .on('mousemove', (event) => {
+                            tooltip.style.left = (event.pageX - container.getBoundingClientRect().left + 12) + 'px';
+                            tooltip.style.top = (event.pageY - container.getBoundingClientRect().top - 30) + 'px';
+                        })
+                        .on('mouseout', () => { tooltip.style.display = 'none'; });
+                    
+                    // 卡片背景
+                    const fillColor = p.gender === '女' ? '#fce4ec' : '#e3f2fd';
+                    const borderColor = p.tag === '始祖' ? '#8b0000' : (p.gender === '女' ? '#c62828' : '#1565c0');
+                    
+                    card.append('rect')
+                        .attr('x', px)
+                        .attr('y', py)
+                        .attr('width', cardW)
+                        .attr('height', cardH)
+                        .attr('rx', 6)
+                        .attr('fill', fillColor)
+                        .attr('stroke', borderColor)
+                        .attr('stroke-width', p.tag === '始祖' ? 3 : 1.5);
+                    
+                    // 姓名
+                    card.append('text')
+                        .attr('x', px + cardW / 2)
+                        .attr('y', py + 22)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '13px')
+                        .attr('font-weight', '600')
+                        .attr('fill', '#2c1810')
+                        .text(p.name.length > 6 ? p.name.substring(0,6)+'…' : p.name);
+                    
+                    // 小字辈
+                    if (p.zibei) {
+                        card.append('text')
+                            .attr('x', px + cardW / 2)
+                            .attr('y', py + 40)
+                            .attr('text-anchor', 'middle')
+                            .attr('font-size', '10px')
+                            .attr('fill', '#888')
+                            .text(p.zibei);
+                    }
+                });
+                
+                idx++;
+            });
+            
+            document.getElementById('infoBar').textContent = 
+                `第${currentGen}世 · ${persons.length}人 · 滚轮缩放 · 拖拽平移 · 点击查看详情`;
+        }
+        
+        function searchRoot() {
+            const q = document.getElementById('rootSearch').value.trim();
+            if (q) window.location.href = '/search?q=' + encodeURIComponent(q);
+        }
+        
+        function resetZoom() {
+            const svg = container.querySelector('svg');
+            if (svg) {
+                const zoom = d3.zoom().identity;
+                d3.select(svg).transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+            }
+        }
+        
+        // 键盘导航：左右键切换世代
+        document.addEventListener('keydown', (e) => {
+            const sel = document.getElementById('genSelect');
+            if (e.key === 'ArrowRight' && sel.selectedIndex < sel.options.length - 1) {
+                sel.selectedIndex++;
+                loadGenTree();
+            } else if (e.key === 'ArrowLeft' && sel.selectedIndex > 0) {
+                sel.selectedIndex--;
+                loadGenTree();
+            }
+        });
+        
+        loadGens();
+    </script>
+</body>
+</html>
