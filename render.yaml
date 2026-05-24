@@ -2,6 +2,6 @@ services:
   - type: web
     name: di-genealogy
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && chmod +x start.sh && gunzip -f di_genealogy.db.gz
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
     plan: free
