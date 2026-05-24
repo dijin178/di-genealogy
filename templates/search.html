@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人物查询 - 溧阳狄氏家谱</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: #f5f0eb; color: #2c1810; }
+        .header { background: linear-gradient(135deg, #8b0000, #a52a2a, #8b0000); color: #fff; padding: 20px 40px; }
+        .header h1 { font-size: 24px; letter-spacing: 2px; }
+        .nav { background: #3e1f0d; display: flex; padding: 0 40px; }
+        .nav a { color: #e8d5c0; text-decoration: none; padding: 12px 24px; font-size: 15px; transition: all 0.3s; border-bottom: 3px solid transparent; }
+        .nav a:hover, .nav a.active { background: #5a2d14; color: #fff; border-bottom-color: #d4a574; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 30px 20px; }
+        
+        .search-panel { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .search-row { display: flex; gap: 12px; }
+        .search-row input { flex: 1; padding: 12px 18px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
+        .search-row input:focus { border-color: #8b0000; }
+        .search-row button { padding: 12px 32px; background: #8b0000; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        .search-row button:hover { background: #a52a2a; }
+        
+        .result-info { color: #888; font-size: 14px; margin-bottom: 16px; }
+        
+        .person-card {
+            background: #fff; border-radius: 10px; padding: 18px 24px; margin-bottom: 10px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.06); cursor: pointer; transition: all 0.2s;
+            border-left: 4px solid #8b0000; display: flex; justify-content: space-between; align-items: center;
+        }
+        .person-card:hover { transform: translateX(4px); box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+        .person-card .name { font-size: 18px; font-weight: 600; color: #2c1810; }
+        .person-card .meta { font-size: 13px; color: #888; margin-top: 4px; }
+        .person-card .badge {
+            display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px;
+            margin-left: 8px;
+        }
+        .badge-gen { background: #f0e8e0; color: #8b0000; }
+        .badge-spouse { background: #fce4ec; color: #c62828; }
+        .badge-male { background: #e3f2fd; color: #1565c0; }
+        .badge-female { background: #fce4ec; color: #c62828; }
+        
+        .empty-state { text-align: center; padding: 60px; color: #999; font-size: 16px; }
+        
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        .pagination a, .pagination span {
+            padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px;
+            background: #fff; color: #333; border: 1px solid #ddd;
+        }
+        .pagination .current { background: #8b0000; color: #fff; border-color: #8b0000; }
+        .pagination a:hover { background: #f0e8e0; }
+        
+        .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; border-top: 1px solid #e0d5cc; margin-top: 40px; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>📜 溧阳狄氏家谱查询系统</h1></div>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/search" class="active">人物查询</a>
+        <a href="/tree">世系树</a>
+        <a href="/stats">统计数据</a>
+    </div>
+    <div class="container">
+        <div class="search-panel">
+            <div class="search-row">
+                <input type="text" id="q" placeholder="输入姓名、字辈、别名或ID号..." value=""
+                       onkeydown="if(event.key==='Enter') search()">
+                <button onclick="search()">搜索</button>
+            </div>
+        </div>
+        <div id="results"></div>
+    </div>
+    <div class="footer">溧阳狄氏历史文化研究会 · 数据库共收录 30,021 位族人</div>
+    
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        let currentQ = params.get('q') || '';
+        let currentPage = 1;
+        
+        if (currentQ) {
+            document.getElementById('q').value = currentQ;
+            search();
+        }
+        
+        async function search(page) {
+            currentQ = document.getElementById('q').value.trim();
+            currentPage = page || 1;
+            if (!currentQ) { document.getElementById('results').innerHTML = '<div class="empty-state">请输入姓名或关键字搜索</div>'; return; }
+            
+            const resp = await fetch(`/api/search?q=${encodeURIComponent(currentQ)}&page=${currentPage}&limit=20`);
+            const data = await resp.json();
+            
+            let html = `<div class="result-info">共找到 <b>${data.total}</b> 位族人 (第${data.page}/${data.pages}页)</div>`;
+            
+            if (data.results.length === 0) {
+                html += '<div class="empty-state">未找到匹配结果</div>';
+            } else {
+                data.results.forEach(p => {
+                    const genBadge = p.shixi ? `<span class="badge badge-gen">${p.shixi}</span>` : '';
+                    const genderBadge = p.gender === '女' ? '<span class="badge badge-female">女</span>' : '<span class="badge badge-male">男</span>';
+                    const spouseBadge = p.is_spouse ? '<span class="badge badge-spouse">配偶</span>' : '';
+                    const bio = [p.zibei, p.alias].filter(x => x).join(' · ');
+                    
+                    html += `<div class="person-card" onclick="window.location='/person/${p.id}'">
+                        <div>
+                            <div class="name">${p.name} ${genBadge} ${genderBadge} ${spouseBadge}</div>
+                            <div class="meta">${bio ? bio + ' · ' : ''}ID: ${p.original_id}${p.birth ? ' · ' + p.birth : ''}</div>
+                        </div>
+                        <div style="color:#bbb;font-size:20px;">›</div>
+                    </div>`;
+                });
+                
+                if (data.pages > 1) {
+                    html += '<div class="pagination">';
+                    if (currentPage > 1) html += `<a href="javascript:search(${currentPage-1})">‹ 上一页</a>`;
+                    for (let i = Math.max(1, currentPage-2); i <= Math.min(data.pages, currentPage+2); i++) {
+                        html += i === currentPage ? `<span class="current">${i}</span>` : `<a href="javascript:search(${i})">${i}</a>`;
+                    }
+                    if (currentPage < data.pages) html += `<a href="javascript:search(${currentPage+1})">下一页 ›</a>`;
+                    html += '</div>';
+                }
+            }
+            
+            document.getElementById('results').innerHTML = html;
+            // 更新URL
+            history.replaceState(null, '', `/search?q=${encodeURIComponent(currentQ)}&page=${currentPage}`);
+        }
+    </script>
+</body>
+</html>
