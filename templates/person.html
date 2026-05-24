@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人物详情 - 溧阳狄氏家谱</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: #f5f0eb; color: #2c1810; }
+        .header { background: linear-gradient(135deg, #8b0000, #a52a2a, #8b0000); color: #fff; padding: 20px 40px; }
+        .header h1 { font-size: 24px; letter-spacing: 2px; }
+        .nav { background: #3e1f0d; display: flex; padding: 0 40px; }
+        .nav a { color: #e8d5c0; text-decoration: none; padding: 12px 24px; font-size: 15px; transition: all 0.3s; border-bottom: 3px solid transparent; }
+        .nav a:hover, .nav a.active { background: #5a2d14; color: #fff; border-bottom-color: #d4a574; }
+        .container { max-width: 900px; margin: 0 auto; padding: 30px 20px; }
+        
+        .breadcrumb { font-size: 14px; color: #999; margin-bottom: 20px; }
+        .breadcrumb a { color: #8b0000; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        
+        .profile-card { background: #fff; border-radius: 12px; padding: 30px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        .profile-name { font-size: 32px; font-weight: 700; color: #2c1810; }
+        .profile-shixi { font-size: 16px; color: #8b0000; margin-top: 4px; }
+        .profile-tags { margin-top: 8px; }
+        .tag { display: inline-block; padding: 3px 12px; border-radius: 14px; font-size: 13px; margin-right: 6px; margin-bottom: 4px; }
+        .tag-gen { background: #f0e8e0; color: #8b0000; }
+        .tag-gender { background: #e3f2fd; color: #1565c0; }
+        .tag-spouse { background: #fce4ec; color: #c62828; }
+        .tag-zibei { background: #fff3e0; color: #e65100; }
+        .tag-tag { background: #e8f5e9; color: #2e7d32; }
+        
+        .profile-meta { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 10px; }
+        .meta-item { font-size: 14px; color: #555; }
+        .meta-item .label { color: #999; }
+        
+        .bio-box { background: #fdf8f3; border-left: 4px solid #d4a574; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 16px; }
+        .bio-box h4 { color: #8b0000; font-size: 14px; margin-bottom: 8px; }
+        .bio-box p { font-size: 14px; line-height: 1.8; color: #444; }
+        
+        .ancestor-chain { margin-bottom: 20px; }
+        .ancestor-chain h3 { font-size: 16px; color: #5a2d14; margin-bottom: 10px; }
+        .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+        .chain a { color: #8b0000; text-decoration: none; font-size: 14px; padding: 4px 10px; background: #fff; border-radius: 4px; }
+        .chain a:hover { background: #f0e8e0; }
+        .chain .arrow { color: #ccc; font-size: 12px; }
+        
+        .section { margin-bottom: 20px; }
+        .section h3 { font-size: 16px; color: #5a2d14; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #e0d5cc; }
+        
+        .person-list { display: grid; gap: 8px; }
+        .person-item {
+            background: #fff; padding: 12px 18px; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #d4a574;
+        }
+        .person-item:hover { transform: translateX(4px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .person-item .name { font-size: 15px; font-weight: 600; }
+        .person-item .meta { font-size: 12px; color: #999; }
+        
+        .siblings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 8px; }
+        
+        .loading { text-align: center; padding: 60px; color: #999; }
+        .error { text-align: center; padding: 60px; color: #c62828; }
+        
+        .back-btn { display: inline-block; padding: 8px 20px; background: #8b0000; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; margin-bottom: 20px; }
+        .back-btn:hover { background: #a52a2a; }
+        
+        .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; border-top: 1px solid #e0d5cc; margin-top: 40px; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>📜 溧阳狄氏家谱查询系统</h1></div>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/search">人物查询</a>
+        <a href="/tree">世系树</a>
+        <a href="/stats">统计数据</a>
+    </div>
+    <div class="container" id="app">
+        <a href="javascript:history.back()" class="back-btn">← 返回</a>
+        <div class="loading" id="loading">加载中...</div>
+        <div id="content" style="display:none"></div>
+    </div>
+    <div class="footer">溧阳狄氏历史文化研究会</div>
+    
+    <script>
+        const personId = {{ person_id }};
+        
+        async function loadPerson() {
+            try {
+                const resp = await fetch(`/api/person/${personId}`);
+                if (!resp.ok) throw new Error('未找到');
+                const p = await resp.json();
+                renderPerson(p);
+            } catch(e) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                document.getElementById('content').innerHTML = `<div class="error">❌ ${e.message}</div>`;
+            }
+        }
+        
+        function renderPerson(p) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            
+            const genTag = p.shixi ? `<span class="tag tag-gen">${p.shixi}</span>` : '';
+            const genderTag = p.gender === '女' ? `<span class="tag tag-spouse">女</span>` : `<span class="tag tag-gender">男</span>`;
+            const spouseTag = p.is_spouse ? '<span class="tag tag-spouse">配偶</span>' : '';
+            const zibeiTag = p.zibei ? `<span class="tag tag-zibei">字辈: ${p.zibei}</span>` : '';
+            const tagTag = p.tag ? `<span class="tag tag-tag">${p.tag}</span>` : '';
+            
+            // 祖先链
+            let ancestorHtml = '';
+            if (p.ancestors && p.ancestors.length > 0) {
+                ancestorHtml = `<div class="ancestor-chain"><h3>🏛️ 祖先传承</h3><div class="chain">`;
+                p.ancestors.forEach((a, i) => {
+                    ancestorHtml += `<a href="/person/${a.id}">${a.full_name}</a>`;
+                    if (i < p.ancestors.length - 1) ancestorHtml += `<span class="arrow">→</span>`;
+                });
+                if (!p.is_spouse) {
+                    ancestorHtml += `<span class="arrow">→</span><span style="padding:4px 10px;font-weight:600;color:#8b0000;">${p.full_name}</span>`;
+                }
+                ancestorHtml += `</div></div>`;
+            }
+            
+            // 传记
+            const bioHtml = p.biography ? `<div class="bio-box"><h4>📖 人物简介</h4><p>${p.biography}</p></div>` : '';
+            
+            // 子女
+            let childrenHtml = '';
+            if (p.children && p.children.length > 0) {
+                childrenHtml = '<div class="section"><h3>👶 子女 (${p.children.length}人)</h3><div class="person-list">';
+                p.children.forEach(c => {
+                    childrenHtml += `<div class="person-item" onclick="window.location='/person/${c.id}'">
+                        <div><div class="name">${c.full_name}</div><div class="meta">${c.shixi || ''}${c.birth_date ? ' · ' + c.birth_date : ''}</div></div>
+                        <div style="color:#bbb;">›</div>
+                    </div>`;
+                });
+                childrenHtml += '</div></div>';
+            }
+            
+            // 配偶
+            let spouseHtml = '';
+            if (p.spouses && p.spouses.length > 0) {
+                spouseHtml = '<div class="section"><h3>💑 配偶 (${p.spouses.length}人)</h3><div class="person-list">';
+                p.spouses.forEach(s => {
+                    spouseHtml += `<div class="person-item" onclick="window.location='/person/${s.id}'">
+                        <div><div class="name">${s.full_name}</div><div class="meta">${s.birth_date || ''}</div></div>
+                        <div style="color:#bbb;">›</div>
+                    </div>`;
+                });
+                spouseHtml += '</div></div>';
+            }
+            
+            // 如果是配偶，显示配偶对象
+            let partnerHtml = '';
+            if (p.is_spouse && p.partner) {
+                partnerHtml = `<div class="section"><h3>💑 配偶对象</h3><div class="person-item" onclick="window.location='/person/${p.partner.id}'">
+                    <div><div class="name">${p.partner.full_name}</div><div class="meta">${p.partner.shixi || ''}</div></div>
+                    <div style="color:#bbb;">›</div>
+                </div></div>`;
+            }
+            
+            // 兄弟姊妹
+            let siblingHtml = '';
+            if (p.siblings && p.siblings.length > 0) {
+                siblingHtml = '<div class="section"><h3>👥 兄弟姊妹 (${p.siblings.length}人)</h3><div class="siblings-grid">';
+                p.siblings.forEach(s => {
+                    siblingHtml += `<div class="person-item" onclick="window.location='/person/${s.id}'">
+                        <div><div class="name">${s.full_name}</div><div class="meta">${s.shixi_num ? '第'+s.shixi_num+'世' : ''}</div></div>
+                        <div style="color:#bbb;">›</div>
+                    </div>`;
+                });
+                siblingHtml += '</div></div>';
+            }
+            
+            const metaItems = [
+                p.alias ? {label:'别名',val:p.alias} : null,
+                p.original_id ? {label:'ID',val:p.original_id} : null,
+                p.rank ? {label:'排行',val:'第'+p.rank} : null,
+                p.birth_date ? {label:'出生',val:p.birth_date} : null,
+                p.death_date ? {label:'过世',val:p.death_date} : null,
+                p.birthplace ? {label:'出生地',val:p.birthplace} : null,
+                p.phone ? {label:'电话',val:p.phone} : null,
+                p.is_alive === 1 ? {label:'状态',val:'健在'} : (p.death_date ? null : {label:'状态',val:'已故'})
+            ].filter(x => x);
+            
+            const metaHtml = metaItems.length > 0 ? `<div class="profile-meta">${
+                metaItems.map(m => `<div class="meta-item"><span class="label">${m.label}:</span> ${m.val}</div>`).join('')
+            }</div>` : '';
+            
+            document.getElementById('content').innerHTML = `
+                ${ancestorHtml}
+                <div class="profile-card">
+                    <div class="profile-name">${p.full_name} ${genTag}</div>
+                    <div class="profile-tags">${genderTag}${spouseTag}${zibeiTag}${tagTag}</div>
+                    ${metaHtml}
+                    ${bioHtml}
+                </div>
+                ${partnerHtml}
+                ${spouseHtml}
+                ${childrenHtml}
+                ${siblingHtml}
+            `;
+        }
+        
+        loadPerson();
+    </script>
+</body>
+</html>
