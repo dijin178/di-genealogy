@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据统计 - 溧阳狄氏家谱</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: #f5f0eb; color: #2c1810; }
+        .header { background: linear-gradient(135deg, #8b0000, #a52a2a, #8b0000); color: #fff; padding: 20px 40px; }
+        .header h1 { font-size: 24px; letter-spacing: 2px; }
+        .nav { background: #3e1f0d; display: flex; padding: 0 40px; }
+        .nav a { color: #e8d5c0; text-decoration: none; padding: 12px 24px; font-size: 15px; transition: all 0.3s; border-bottom: 3px solid transparent; }
+        .nav a:hover, .nav a.active { background: #5a2d14; color: #fff; border-bottom-color: #d4a574; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 30px 20px; }
+        
+        .overview-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin-bottom: 30px;
+        }
+        .overview-card {
+            background: #fff; border-radius: 12px; padding: 24px; text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-top: 4px solid #8b0000;
+        }
+        .overview-card .num { font-size: 32px; font-weight: 700; color: #8b0000; }
+        .overview-card .label { font-size: 13px; color: #888; margin-top: 4px; }
+        
+        .chart-section {
+            background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .chart-section h3 { font-size: 18px; color: #5a2d14; margin-bottom: 16px; }
+        
+        .bar-item { display: flex; align-items: center; margin-bottom: 4px; }
+        .bar-label { width: 70px; font-size: 13px; color: #666; text-align: right; padding-right: 10px; flex-shrink: 0; }
+        .bar-track { flex: 1; height: 24px; background: #f0e8e0; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #8b0000, #c0392b); border-radius: 4px;
+                     transition: width 1s ease; display: flex; align-items: center; padding-left: 8px; min-width: 40px; }
+        .bar-fill span { color: #fff; font-size: 11px; font-weight: 600; }
+        
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { background: #f0e8e0; color: #5a2d14; padding: 10px 12px; text-align: left; font-weight: 600; }
+        td { padding: 8px 12px; border-bottom: 1px solid #f0e8e0; }
+        tr:hover td { background: #fdf8f3; }
+        
+        .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; border-top: 1px solid #e0d5cc; margin-top: 40px; }
+        
+        .insight-box {
+            background: #fdf8f3; border-left: 4px solid #d4a574; padding: 16px 20px; border-radius: 0 8px 8px 0;
+            margin-bottom: 20px; font-size: 14px; line-height: 1.8; color: #555;
+        }
+        .insight-box strong { color: #8b0000; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>📜 溧阳狄氏家谱查询系统</h1></div>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/search">人物查询</a>
+        <a href="/tree">世系树</a>
+        <a href="/stats" class="active">统计数据</a>
+    </div>
+    <div class="container">
+        <div class="overview-grid" id="overview"></div>
+        
+        <div class="insight-box" id="insight"></div>
+        
+        <div class="chart-section">
+            <h3>📊 各世代人口分布</h3>
+            <div id="genChart"></div>
+        </div>
+        
+        <div class="chart-section">
+            <h3>📋 各世人口数据表</h3>
+            <div class="table-wrap">
+                <table id="genTable">
+                    <thead><tr><th>世代</th><th>人数</th><th>占比</th><th>累计</th><th>趋势</th></tr></thead>
+                    <tbody id="genTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="footer">溧阳狄氏历史文化研究会 · 数据来源: 溧湘堂20260503.xls</div>
+    
+    <script>
+        async function loadStats() {
+            const resp = await fetch('/api/stats');
+            const data = await resp.json();
+            
+            // 概览卡片
+            document.getElementById('overview').innerHTML = `
+                <div class="overview-card"><div class="num">${data.total.toLocaleString()}</div><div class="label">总人数</div></div>
+                <div class="overview-card"><div class="num">${data.family.toLocaleString()}</div><div class="label">家族成员</div></div>
+                <div class="overview-card"><div class="num">${data.spouses.toLocaleString()}</div><div class="label">配偶</div></div>
+                <div class="overview-card"><div class="num">${data.relations.toLocaleString()}</div><div class="label">父子关系</div></div>
+                <div class="overview-card"><div class="num">${data.max_gen}</div><div class="label">世代数</div></div>
+                <div class="overview-card"><div class="num">${data.with_bio}</div><div class="label">有传记</div></div>
+            `;
+            
+            // 洞察
+            const peakGen = data.generations.reduce((max, g) => g.count > max.count ? g : max, data.generations[0]);
+            const avgPerGen = (data.family / data.max_gen).toFixed(0);
+            document.getElementById('insight').innerHTML = `
+                <strong>📌 数据洞察：</strong><br>
+                · 溧阳狄氏从始祖狄英（第1世）到第${data.max_gen}世，共传承 <strong>${data.max_gen}代</strong><br>
+                · 人口高峰在第<strong>${peakGen.num}世</strong>，共 <strong>${peakGen.count.toLocaleString()}</strong> 人<br>
+                · 平均每世约 <strong>${avgPerGen}</strong> 位家族成员<br>
+                · 数据库共收录 <strong>${data.total.toLocaleString()}</strong> 条完整记录，含 ${data.relations.toLocaleString()} 条父子关系链
+            `;
+            
+            // 柱状图
+            const maxCount = Math.max(...data.generations.map(g => g.count));
+            const firstHalf = data.generations.filter(g => g.num <= 15);
+            const secondHalf = data.generations.filter(g => g.num > 15);
+            
+            let chartHtml = '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">';
+            [firstHalf, secondHalf].forEach((half, hi) => {
+                chartHtml += '<div><h4 style="color:#5a2d14;margin-bottom:10px;font-size:14px;">' + 
+                    (hi === 0 ? '第1~15世' : '第16~' + data.max_gen + '世') + '</h4>';
+                half.forEach(g => {
+                    const pct = Math.max((g.count / maxCount * 100), 2);
+                    chartHtml += `<div class="bar-item">
+                        <div class="bar-label">第${g.num}世</div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width:${pct}%">
+                                <span>${g.count.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                chartHtml += '</div>';
+            });
+            chartHtml += '</div>';
+            document.getElementById('genChart').innerHTML = chartHtml;
+            
+            // 数据表
+            let totalSoFar = 0;
+            const tableHtml = data.generations.map((g, i) => {
+                totalSoFar += g.count;
+                const pct = (g.count / data.family * 100).toFixed(1);
+                const prev = i > 0 ? data.generations[i-1].count : g.count;
+                const diff = g.count - prev;
+                const trend = diff > 0 ? '📈' : (diff < 0 ? '📉' : '➡️');
+                return `<tr>
+                    <td><strong>第${g.num}世</strong></td>
+                    <td>${g.count.toLocaleString()}</td>
+                    <td>${pct}%</td>
+                    <td>${totalSoFar.toLocaleString()}</td>
+                    <td>${trend} ${diff > 0 ? '+' : ''}${diff}</td>
+                </tr>`;
+            }).join('');
+            document.getElementById('genTableBody').innerHTML = tableHtml;
+        }
+        
+        loadStats();
+    </script>
+</body>
+</html>
